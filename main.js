@@ -4,14 +4,15 @@ import TileLayer from 'https://cdn.skypack.dev/ol/layer/Tile.js';
 import OSM from 'https://cdn.skypack.dev/ol/source/OSM.js';
 import VectorLayer from 'https://cdn.skypack.dev/ol/layer/Vector.js';
 import VectorSource from 'https://cdn.skypack.dev/ol/source/Vector.js';
+import Feature from 'https://cdn.skypack.dev/ol/Feature.js';
+import Point from 'https://cdn.skypack.dev/ol/geom/Point.js';
+import { Icon, Style } from 'https://cdn.skypack.dev/ol/style.js';
 import { fromLonLat, toLonLat } from 'https://cdn.skypack.dev/ol/proj.js';
-import { showPopup } from './popup.js';
+import * as turf from 'https://cdn.skypack.dev/@turf/turf';
+import Swal from "https://cdn.jsdelivr.net/npm/sweetalert2@11/src/sweetalert2.js";
+import { addCSS } from "https://cdn.jsdelivr.net/gh/jscroot/lib@0.0.9/element.js";
 
-const markerSource = new VectorSource();
-
-const markerLayer = new VectorLayer({
-  source: markerSource,
-});
+addCSS("https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.css");
 
 const map = new Map({
   target: 'map',
@@ -19,85 +20,200 @@ const map = new Map({
     new TileLayer({
       source: new OSM(),
     }),
-    markerLayer,
   ],
   view: new View({
-    center: fromLonLat([107.9019822944495, -7.215907720160664]),
-    zoom: 12,
+    center: fromLonLat([107.54249456754211, -6.884723248778016]),
+    zoom: 8,
   }),
 });
 
-// Fungsi untuk mendapatkan data alamat dari koordinat
-async function reverseGeocode(lat, lon) {
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+const markerSource = new VectorSource();
+const markerLayer = new VectorLayer({
+  source: markerSource,
+});
+map.addLayer(markerLayer);
+
+const popup = document.getElementById('popup');
+const descriptionInput = document.getElementById('marker-description');
+const addMarkerButton = document.getElementById('add-marker');
+const cancelButton = document.getElementById('cancel');
+let selectedCoordinates = null;
+
+map.on('click', (event) => {
+  const coordinates = toLonLat(event.coordinate);
+  const longitude = coordinates[0].toFixed(6);
+  const latitude = coordinates[1].toFixed(6);
+
+  selectedCoordinates = event.coordinate;
+
+  popup.querySelector('h3').textContent = `Masukkan Lokasi:
+Longitude: ${longitude}
+Latitude: ${latitude}`;
+  popup.classList.remove('hidden');
+});
+
+addMarkerButton.addEventListener('click', () => {
+  const description = descriptionInput.value.trim();
+  if (description && selectedCoordinates) {
+    const marker = new Feature({
+      geometry: new Point(selectedCoordinates),
+      description: description,
+      longitude: toLonLat(selectedCoordinates)[0].toFixed(6),
+      latitude: toLonLat(selectedCoordinates)[1].toFixed(6),
+    });
+
+    marker.setStyle(
+      new Style({
+        image: new Icon({
+          src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+          scale: 0.05,
+        }),
+      })
     );
 
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    } else {
-      console.error('Gagal mendapatkan data geocoding');
-      return null;
+    markerSource.addFeature(marker);
+    popup.classList.add('hidden');
+    descriptionInput.value = '';
+  }
+});
+
+cancelButton.addEventListener('click', () => {
+  popup.classList.add('hidden');
+  descriptionInput.value = '';
+});
+
+map.on('click', (event) => {
+  map.forEachFeatureAtPixel(event.pixel, (feature) => {
+    const description = feature.get('description');
+    const longitude = feature.get('longitude');
+    const latitude = feature.get('latitude');
+    if (description) {
+      const infoPopup = document.createElement('div');
+      infoPopup.className = 'popup';
+      infoPopup.innerHTML = `
+        <div class="popup-content">
+          <h3>Informasi Marker:</h3>
+          <p><strong>Deskripsi:</strong> ${description}</p>
+          <p><strong>Longitude:</strong> ${longitude}</p>
+          <p><strong>Latitude:</strong> ${latitude}</p>
+          <button id="close-info">Tutup</button>
+        </div>
+      `;
+      document.body.appendChild(infoPopup);
+
+      infoPopup.querySelector('#close-info').addEventListener('click', () => {
+        infoPopup.remove();
+      });
     }
-  } catch (error) {
-    console.error('Error saat mengakses API Nominatim:', error);
-    return null;
+  });
+});
+
+function addUserLocationMarker() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userCoordinates = [
+          position.coords.longitude,
+          position.coords.latitude,
+        ];
+        console.log("Koordinat pengguna berhasil diperoleh:", userCoordinates);
+
+        const userMarker = new Feature({
+          geometry: new Point(fromLonLat(userCoordinates)),
+        });
+
+        userMarker.setStyle(
+          new Style({
+            image: new Icon({
+              src: 'https://cdn-icons-png.flaticon.com/512/64/64113.png', // Ikon untuk pengguna
+              scale: 0.05,
+              anchor: [0.5, 1],
+            }),
+          })
+        );
+
+        // Tambahkan marker ke layer peta
+        const userLayer = new VectorLayer({
+          source: new VectorSource({
+            features: [userMarker],
+          }),
+        });
+
+        map.addLayer(userLayer);
+
+        map.getView().animate({
+          center: fromLonLat(userCoordinates),
+          zoom: 16,
+        });
+
+        
+        const nearestLocation = findNearestLocation(userCoordinates, parkingLocations);
+        if (nearestLocation) {
+          const nearestMarker = new Feature({
+            geometry: new Point(fromLonLat(nearestLocation.coordinates)),
+            description: nearestLocation.name,
+          });
+
+          nearestMarker.setStyle(
+            new Style({
+              image: new Icon({
+                src: 'https://cdn-icons-png.flaticon.com/512/854/854878.png', // Ikon untuk lokasi terdekat
+                scale: 0.05,
+              }),
+            })
+          );
+
+          markerSource.addFeature(nearestMarker);
+
+          // Menampilkan notifikasi lokasi terdekat
+          Swal.fire({
+            title: "Lokasi Terdekat",
+            text: `Lokasi terdekat adalah ${nearestLocation.name}.`,
+            icon: "info",
+          });
+        }
+      },
+      (error) => {
+        console.error("Gagal mendapatkan lokasi pengguna:", error.message);
+        Swal.fire({
+          title: "Lokasi tidak tersedia",
+          text: "Pastikan fitur lokasi di perangkat Anda aktif.",
+          icon: "error",
+        });
+      }
+    );
+  } else {
+    Swal.fire({
+      title: "Geolokasi tidak didukung",
+      text: "Perangkat Anda tidak mendukung geolokasi.",
+      icon: "warning",
+    });
   }
 }
 
-// Event klik di peta
-map.on('click', async (event) => {
-  const coordinate = event.coordinate;
-  const [lon, lat] = toLonLat(coordinate);
 
-  const geocodeData = await reverseGeocode(lat, lon);
+const parkingLocations = [
+  { name: "Lokasi A", coordinates: [107.580642, -6.883722] },
+  { name: "Lokasi B", coordinates: [107.579529, -6.882788] },
+];
 
-  if (geocodeData) {
-    const address = geocodeData.display_name || 'Alamat tidak tersedia';
+function findNearestLocation(userCoordinates, locations) {
+  let nearest = null;
+  let minDistance = Infinity;
 
-    showPopup(
-      'Informasi Lokasi',
-      `<strong>Alamat:</strong> ${address}<br>
-       <strong>Latitude:</strong> ${lat.toFixed(6)}<br>
-       <strong>Longitude:</strong> ${lon.toFixed(6)}`
+  locations.forEach((location) => {
+    const distance = turf.distance(
+      turf.point(userCoordinates),
+      turf.point(location.coordinates)
     );
-  } else {
-    showPopup(
-      'Informasi Lokasi',
-      `<strong>Latitude:</strong> ${lat.toFixed(6)}<br>
-       <strong>Longitude:</strong> ${lon.toFixed(6)}<br>
-       <strong>Keterangan:</strong> Tidak ada informasi lokasi yang tersedia.`
-    );
-  }
-});
-// Panggil fungsi untuk memperbarui daftar lokasi setelah halaman dimuat
-document.addEventListener('DOMContentLoaded', () => {
-  const updateLocationList = () => {
-    const savedLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
-    const locationList = document.getElementById('location-list');
 
-    if (!locationList) {
-      console.error('Elemen lokasi daftar tidak ditemukan!');
-      return;
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearest = location;
     }
+  });
 
-    locationList.innerHTML = ''; // Kosongkan list sebelumnya
-    savedLocations.forEach((location) => {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <div class="location-header">
-          <h4>${location.title}</h4>
-          <i class="fa fa-map-marker"></i>
-        </div>
-        <div class="location-description">${location.description}</div>
-        <div class="location-coordinates">${location.message}</div>
-      `;
-      locationList.appendChild(li);
-    });
-  };
+  return nearest;
+}
 
-  // Panggil fungsi untuk memuat lokasi tersimpan
-  updateLocationList();
-});
+addUserLocationMarker();
