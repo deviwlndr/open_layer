@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Map</title>
+  
+  <!-- OpenLayers CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha384-dyB7E6ny8JKka9B64vT4EgvWm+uKHMO3A8UEI2ap5vzJ9z+frRoaZzKnbwvxj7f5" crossorigin="anonymous">
+
+  
+  <!-- Main JS and Popup JS -->
+  <script type="module" src="/main.js"></script>
+  <script type="module" src="/popup.js"></script>
+
+  <style>
+    /* General Reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #cf608d;
+      color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+    }
+
+    h1 {
+      font-size: 2.2em;
+      color: #ff4081;
+      margin-bottom: 30px;
+    }
+
+    /* Map Container */
+    #map {
+      width: 100%;
+      height: 70vh;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+      margin-bottom: 30px;
+    }
+
+    /* Locations List */
+    #locations {
+      width: 100%;
+      max-width: 800px;
+      background-color: #1e1e1e;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    h3 {
+      font-size: 1.8em;
+      color: #f4f4f4;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    #location-list {
+      margin-top: 20px;
+      list-style: none;
+      padding: 0;
+    }
+
+    #location-list li {
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      background-color: #2c2c2c;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+      transition: transform 0.2s ease, background-color 0.3s;
+    }
+
+    #location-list li:hover {
+      background-color: #3a3a3a;
+      transform: translateY(-5px);
+    }
+
+    .location-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+
+    .location-header h4 {
+      font-size: 1.2em;
+      color: #ff4081;
+      font-weight: bold;
+    }
+
+    .location-header i {
+      font-size: 1.5em;
+      color: #ff4081;
+    }
+
+    .location-description {
+      font-size: 1em;
+      color: #ddd;
+      margin-bottom: 10px;
+    }
+
+    .location-coordinates {
+      font-size: 0.95em;
+      font-weight: bold;
+      color: #f4f4f4;
+      background-color: #ff4081;
+      padding: 5px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    /* Popup Styles */
+    .popup {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      transition: opacity 0.3s ease-in-out;
+    }
+
+    .popup.hidden {
+      display: none;
+      opacity: 0;
+    }
+
+    .popup-content {
+      background: #333;
+      padding: 25px;
+      border-radius: 15px;
+      text-align: center;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+    .popup h3 {
+      font-size: 1.6em;
+      color: #ff4081;
+      margin-bottom: 15px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 80px;
+      padding: 12px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      resize: none;
+      font-size: 14px;
+      color: #f4f4f4;
+      background-color: #2c2c2c;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 12px 18px;
+      margin: 10px 5px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s ease;
+      min-width: 100px;
+      background-color: #ff4081;
+      color: white;
+    }
+
+    #cancel-location {
+      background: #e53935;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+      #map {
+        height: 50vh;
+      }
+
+      .popup-content {
+        width: 90%;
+      }
+
+      h1 {
+        font-size: 2em;
+      }
+
+      h3 {
+        font-size: 1.5em;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <h1>Interactive Map</h1>
+  <div id="map"></div>
+  <div id="locations">
+    <h3>Simpan Lokasi:</h3>
+    <ul id="location-list"></ul>
+  </div>  
+ 
+
+  <!-- Popup for saving location -->
+  <!-- Popup untuk menampilkan informasi lokasi -->
+<div id="input-popup" class="popup hidden">
+  <div class="popup-content">
+    <h3 id="popup-coordinates"></h3> <!-- Ditambahkan untuk konten dinamis -->
+    <textarea id="location-description" placeholder="Tambahkan deskripsi jika diperlukan..."></textarea>
+    <button id="save-location">Simpan</button>
+    <button id="cancel-location">Tutup</button>
+  </div>
+</div>
+
+
+  <!-- Font Awesome Icon Library -->
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</body>
+</html>
